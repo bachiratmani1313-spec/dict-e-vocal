@@ -35,6 +35,26 @@
             font-size: 1.1rem;
         }
         
+        /* Browser Check */
+        .browser-check {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .browser-check.error {
+            background: #fee2e2;
+            border-color: #ef4444;
+            display: block;
+        }
+        .browser-check.success {
+            background: #d1fae5;
+            border-color: #10b981;
+            display: block;
+        }
+        
         /* Microphone Button */
         .mic-container {
             margin: 30px 0;
@@ -50,25 +70,22 @@
             cursor: pointer;
             transition: all 0.3s;
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            position: relative;
         }
         .mic-btn:hover {
             transform: scale(1.05);
-            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.5);
+        }
+        .mic-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
         .mic-btn.recording {
             background: linear-gradient(135deg, #f5365c, #f56036);
             animation: pulse 1.5s infinite;
         }
         @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-        .mic-btn.recording::after {
-            content: '🔴';
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            font-size: 1.5rem;
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 54, 92, 0.7); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(245, 54, 92, 0); }
         }
         
         /* Status */
@@ -77,10 +94,22 @@
             color: #666;
             margin: 20px 0;
             min-height: 30px;
+            padding: 10px;
+            border-radius: 10px;
+            background: #f3f4f6;
         }
         .status.listening {
-            color: #f5365c;
+            color: white;
+            background: #f5365c;
             font-weight: 600;
+        }
+        .status.error {
+            color: white;
+            background: #ef4444;
+        }
+        .status.success {
+            color: white;
+            background: #10b981;
         }
         
         /* Text Area */
@@ -124,23 +153,17 @@
             background: #10b981;
             color: white;
         }
-        .btn-copy:hover {
-            background: #059669;
-        }
+        .btn-copy:hover { background: #059669; }
         .btn-clear {
             background: #ef4444;
             color: white;
         }
-        .btn-clear:hover {
-            background: #dc2626;
-        }
-        .btn-send {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+        .btn-clear:hover { background: #dc2626; }
+        .btn-test {
+            background: #3b82f6;
             color: white;
         }
-        .btn-send:hover {
-            opacity: 0.9;
-        }
+        .btn-test:hover { background: #2563eb; }
         
         /* Toast */
         .toast {
@@ -188,12 +211,20 @@
         .instructions li {
             margin: 8px 0;
         }
+        .instructions .warning {
+            background: #fef3c7;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🎤 Dictée Vocale</h1>
         <p class="subtitle">Parlez, j'écris pour vous !</p>
+        
+        <div class="browser-check" id="browserCheck"></div>
         
         <select class="lang-select" id="langSelect">
             <option value="fr-FR">🇫🇷 Français</option>
@@ -204,9 +235,7 @@
         </select>
         
         <div class="mic-container">
-            <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
-                🎤
-            </button>
+            <button class="mic-btn" id="micBtn" onclick="toggleRecording()">🎤</button>
         </div>
         
         <p class="status" id="status">Cliquez sur le micro pour commencer</p>
@@ -216,6 +245,7 @@
         </div>
         
         <div class="btn-group">
+            <button class="btn btn-test" onclick="testMicrophone()">🧪 Tester le micro</button>
             <button class="btn btn-copy" onclick="copyText()">📋 Copier</button>
             <button class="btn btn-clear" onclick="clearText()">🗑️ Effacer</button>
         </div>
@@ -223,12 +253,15 @@
         <div class="instructions">
             <h3>📖 Instructions :</h3>
             <ul>
-                <li><strong>Cliquez sur 🎤</strong> pour démarrer l'enregistrement</li>
-                <li><strong>Parlez clairement</strong> dans votre microphone</li>
-                <li><strong>Le texte s'affiche</strong> automatiquement</li>
-                <li><strong>Cliquez sur 🎤</strong> again pour arrêter</li>
-                <li><strong>Copiez le texte</strong> pour le coller ailleurs</li>
+                <li><strong>1. Cliquez sur "Tester le micro"</strong> pour vérifier que tout fonctionne</li>
+                <li><strong>2. Autorisez le microphone</strong> si le navigateur demande</li>
+                <li><strong>3. Cliquez sur 🎤</strong> pour démarrer l'enregistrement</li>
+                <li><strong>4. Parlez clairement</strong> dans votre microphone</li>
+                <li><strong>5. Le texte s'affiche</strong> automatiquement</li>
             </ul>
+            <div class="warning">
+                ⚠️ <strong>Important :</strong> Utilisez <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong>. Safari et Firefox ne sont pas compatibles.
+            </div>
         </div>
     </div>
     
@@ -238,13 +271,73 @@
         let isRecording = false;
         let recognition = null;
         
-        // Check browser support
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        // Check browser on load
+        window.onload = function() {
+            checkBrowser();
+        };
+        
+        function checkBrowser() {
+            const check = document.getElementById('browserCheck');
+            const micBtn = document.getElementById('micBtn');
+            
+            // Check if Speech Recognition is supported
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                check.className = 'browser-check error';
+                check.innerHTML = '❌ <strong>Erreur :</strong> Votre navigateur ne supporte pas la reconnaissance vocale.<br><br>✅ Utilisez <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong>.';
+                micBtn.disabled = true;
+                return false;
+            }
+            
+            // Check if getUserMedia is supported
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                check.className = 'browser-check error';
+                check.innerHTML = '❌ <strong>Erreur :</strong> Votre navigateur ne supporte pas l\'accès au microphone.<br><br>✅ Utilisez <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong>.';
+                micBtn.disabled = true;
+                return false;
+            }
+            
+            check.className = 'browser-check success';
+            check.innerHTML = '✅ <strong>Navigateur compatible !</strong> Cliquez sur "Tester le micro" pour commencer.';
+            return true;
+        }
+        
+        async function testMicrophone() {
+            const status = document.getElementById('status');
+            const check = document.getElementById('browserCheck');
+            
+            status.textContent = '🎤 Demande d\'autorisation du microphone...';
+            status.className = 'status';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Microphone is working
+                status.textContent = '✅ Microphone autorisé ! Vous pouvez maintenant utiliser la dictée vocale.';
+                status.className = 'status success';
+                check.className = 'browser-check success';
+                check.innerHTML = '✅ <strong>Microphone prêt !</strong> Cliquez sur 🎤 pour dicter.';
+                
+                // Stop the stream
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                status.textContent = '❌ Erreur microphone : ' + error.message;
+                status.className = 'status error';
+                check.className = 'browser-check error';
+                check.innerHTML = '❌ <strong>Microphone bloqué !</strong><br><br>Veuillez autoriser le microphone dans les paramètres de votre navigateur.<br><br>1. Cliquez sur l\'icône 🔒 ou 🎤 dans la barre d\'adresse<br>2. Autorisez le microphone<br>3. Actualisez la page';
+            }
+        }
+        
+        function initRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-            recognition.lang = 'fr-FR';
+            recognition.lang = document.getElementById('langSelect').value;
+            
+            recognition.onstart = function() {
+                console.log('Reconnaissance démarrée');
+            };
             
             recognition.onresult = function(event) {
                 let finalTranscript = '';
@@ -259,24 +352,52 @@
                     }
                 }
                 
+                const textArea = document.getElementById('textArea');
+                
                 if (finalTranscript) {
-                    document.getElementById('textArea').value += finalTranscript + ' ';
+                    textArea.value += finalTranscript + ' ';
+                }
+                
+                // Show interim results
+                if (interimTranscript) {
+                    document.getElementById('status').textContent = '📝 "' + interimTranscript + '"';
                 }
             };
             
             recognition.onerror = function(event) {
                 console.error('Erreur:', event.error);
-                document.getElementById('status').textContent = '❌ Erreur: ' + event.error;
+                let errorMsg = '❌ Erreur: ';
+                
+                switch(event.error) {
+                    case 'not-allowed':
+                        errorMsg += 'Microphone non autorisé. Cliquez sur "Tester le micro".';
+                        break;
+                    case 'no-speech':
+                        errorMsg += 'Aucune parole détectée. Parlez plus fort.';
+                        break;
+                    case 'network':
+                        errorMsg += 'Erreur réseau. Vérifiez votre connexion internet.';
+                        break;
+                    default:
+                        errorMsg += event.error;
+                }
+                
+                document.getElementById('status').textContent = errorMsg;
+                document.getElementById('status').className = 'status error';
                 stopRecording();
             };
             
             recognition.onend = function() {
+                console.log('Reconnaissance terminée');
                 if (isRecording) {
-                    recognition.start();
+                    // Restart if still recording
+                    try {
+                        recognition.start();
+                    } catch(e) {
+                        console.log('Could not restart:', e);
+                    }
                 }
             };
-        } else {
-            alert('❌ Votre navigateur ne supporte pas la reconnaissance vocale. Utilisez Chrome ou Edge.');
         }
         
         function toggleRecording() {
@@ -288,19 +409,23 @@
         }
         
         function startRecording() {
-            if (!recognition) {
-                alert('Reconnaissance vocale non disponible');
-                return;
-            }
+            // Initialize recognition
+            initRecognition();
             
             recognition.lang = document.getElementById('langSelect').value;
-            recognition.start();
-            isRecording = true;
             
-            document.getElementById('micBtn').classList.add('recording');
-            document.getElementById('micBtn').innerHTML = '⏹️';
-            document.getElementById('status').textContent = '🔴 Enregistrement en cours... Parlez !';
-            document.getElementById('status').classList.add('listening');
+            try {
+                recognition.start();
+                isRecording = true;
+                
+                document.getElementById('micBtn').classList.add('recording');
+                document.getElementById('micBtn').innerHTML = '⏹️';
+                document.getElementById('status').textContent = '🔴 Enregistrement en cours... Parlez maintenant !';
+                document.getElementById('status').className = 'status listening';
+            } catch(e) {
+                document.getElementById('status').textContent = '❌ Erreur: ' + e.message;
+                document.getElementById('status').className = 'status error';
+            }
         }
         
         function stopRecording() {
@@ -311,26 +436,36 @@
             
             document.getElementById('micBtn').classList.remove('recording');
             document.getElementById('micBtn').innerHTML = '🎤';
-            document.getElementById('status').textContent = '✅ Enregistrement terminé. Cliquez sur le micro pour recommencer.';
-            document.getElementById('status').classList.remove('listening');
+            document.getElementById('status').textContent = '⏹️ Enregistrement arrêté. Cliquez sur 🎤 pour recommencer.';
+            document.getElementById('status').className = 'status';
         }
         
         function copyText() {
             const textArea = document.getElementById('textArea');
+            
+            if (!textArea.value.trim()) {
+                showToast('⚠️ Aucun texte à copier !');
+                return;
+            }
+            
             textArea.select();
             document.execCommand('copy');
-            
-            // Show toast
-            const toast = document.getElementById('toast');
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 2000);
+            showToast('✅ Texte copié !');
         }
         
         function clearText() {
             document.getElementById('textArea').value = '';
             document.getElementById('status').textContent = 'Cliquez sur le micro pour commencer';
+            document.getElementById('status').className = 'status';
+        }
+        
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
         }
         
         // Language change
@@ -338,6 +473,7 @@
             if (recognition) {
                 recognition.lang = this.value;
             }
+            showToast('🌐 Langue changée : ' + this.options[this.selectedIndex].text);
         });
     </script>
 </body>
