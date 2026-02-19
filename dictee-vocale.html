@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎤 Dictée Vocale - Assistant Vocal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 30px;
+            padding: 40px;
+            max-width: 700px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        h1 { 
+            font-size: 2rem; 
+            color: #333; 
+            margin-bottom: 10px; 
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+        
+        /* Microphone Button */
+        .mic-container {
+            margin: 30px 0;
+        }
+        .mic-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        .mic-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.5);
+        }
+        .mic-btn.recording {
+            background: linear-gradient(135deg, #f5365c, #f56036);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .mic-btn.recording::after {
+            content: '🔴';
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 1.5rem;
+        }
+        
+        /* Status */
+        .status {
+            font-size: 1.1rem;
+            color: #666;
+            margin: 20px 0;
+            min-height: 30px;
+        }
+        .status.listening {
+            color: #f5365c;
+            font-weight: 600;
+        }
+        
+        /* Text Area */
+        .text-container {
+            margin: 20px 0;
+        }
+        .text-area {
+            width: 100%;
+            min-height: 200px;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            font-size: 1.2rem;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.6;
+        }
+        .text-area:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-copy {
+            background: #10b981;
+            color: white;
+        }
+        .btn-copy:hover {
+            background: #059669;
+        }
+        .btn-clear {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-clear:hover {
+            background: #dc2626;
+        }
+        .btn-send {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .btn-send:hover {
+            opacity: 0.9;
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            display: none;
+            z-index: 1000;
+        }
+        .toast.show {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+        
+        /* Language Select */
+        .lang-select {
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+        
+        /* Instructions */
+        .instructions {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .instructions ul {
+            margin-left: 20px;
+            color: #666;
+        }
+        .instructions li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Dictée Vocale</h1>
+        <p class="subtitle">Parlez, j'écris pour vous !</p>
+        
+        <select class="lang-select" id="langSelect">
+            <option value="fr-FR">🇫🇷 Français</option>
+            <option value="en-US">🇺🇸 English</option>
+            <option value="es-ES">🇪🇸 Español</option>
+            <option value="de-DE">🇩🇪 Deutsch</option>
+            <option value="ar-MA">🇲🇦 العربية (Maroc)</option>
+        </select>
+        
+        <div class="mic-container">
+            <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
+                🎤
+            </button>
+        </div>
+        
+        <p class="status" id="status">Cliquez sur le micro pour commencer</p>
+        
+        <div class="text-container">
+            <textarea class="text-area" id="textArea" placeholder="Votre texte apparaîtra ici..."></textarea>
+        </div>
+        
+        <div class="btn-group">
+            <button class="btn btn-copy" onclick="copyText()">📋 Copier</button>
+            <button class="btn btn-clear" onclick="clearText()">🗑️ Effacer</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>📖 Instructions :</h3>
+            <ul>
+                <li><strong>Cliquez sur 🎤</strong> pour démarrer l'enregistrement</li>
+                <li><strong>Parlez clairement</strong> dans votre microphone</li>
+                <li><strong>Le texte s'affiche</strong> automatiquement</li>
+                <li><strong>Cliquez sur 🎤</strong> again pour arrêter</li>
+                <li><strong>Copiez le texte</strong> pour le coller ailleurs</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast">✅ Texte copié !</div>
+    
+    <script>
+        let isRecording = false;
+        let recognition = null;
+        
+        // Check browser support
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'fr-FR';
+            
+            recognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                if (finalTranscript) {
+                    document.getElementById('textArea').value += finalTranscript + ' ';
+                }
+            };
+            
+            recognition.onerror = function(event) {
+                console.error('Erreur:', event.error);
+                document.getElementById('status').textContent = '❌ Erreur: ' + event.error;
+                stopRecording();
+            };
+            
+            recognition.onend = function() {
+                if (isRecording) {
+                    recognition.start();
+                }
+            };
+        } else {
+            alert('❌ Votre navigateur ne supporte pas la reconnaissance vocale. Utilisez Chrome ou Edge.');
+        }
+        
+        function toggleRecording() {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+        
+        function startRecording() {
+            if (!recognition) {
+                alert('Reconnaissance vocale non disponible');
+                return;
+            }
+            
+            recognition.lang = document.getElementById('langSelect').value;
+            recognition.start();
+            isRecording = true;
+            
+            document.getElementById('micBtn').classList.add('recording');
+            document.getElementById('micBtn').innerHTML = '⏹️';
+            document.getElementById('status').textContent = '🔴 Enregistrement en cours... Parlez !';
+            document.getElementById('status').classList.add('listening');
+        }
+        
+        function stopRecording() {
+            if (recognition) {
+                recognition.stop();
+            }
+            isRecording = false;
+            
+            document.getElementById('micBtn').classList.remove('recording');
+            document.getElementById('micBtn').innerHTML = '🎤';
+            document.getElementById('status').textContent = '✅ Enregistrement terminé. Cliquez sur le micro pour recommencer.';
+            document.getElementById('status').classList.remove('listening');
+        }
+        
+        function copyText() {
+            const textArea = document.getElementById('textArea');
+            textArea.select();
+            document.execCommand('copy');
+            
+            // Show toast
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+        
+        function clearText() {
+            document.getElementById('textArea').value = '';
+            document.getElementById('status').textContent = 'Cliquez sur le micro pour commencer';
+        }
+        
+        // Language change
+        document.getElementById('langSelect').addEventListener('change', function() {
+            if (recognition) {
+                recognition.lang = this.value;
+            }
+        });
+    </script>
+</body>
+</html>
